@@ -14,6 +14,10 @@ build:
 push:
 	docker push $(IMAGE_NAME)
 
+# Test local temperature REST API
+test:
+	curl -sS http://localhost:80/temp | jq .
+
 # Remove the local container image
 clean:
 	-docker rm -f $(IMAGE_NAME) 2>/dev/null || :
@@ -24,7 +28,8 @@ clean:
 dev:
 	#xhost +
 	-docker rm -f tempmon 2>/dev/null || :
-	docker run -it -p 0.0.0.0:8000:6543 \
+	docker run -it \
+            -p 0.0.0.0:80:80 \
             --name tempmon --privileged --restart unless-stopped \
             --device /dev:/dev \
             -e DISPLAY=":0.0" \
@@ -35,7 +40,8 @@ dev:
 run:
 	#xhost +
 	-docker rm -f tempmon 2>/dev/null || :
-	docker run -d -p 0.0.0.0:80:6543 \
+	docker run -d \
+            -p 0.0.0.0:80:80 \
             --name tempmon --privileged --restart unless-stopped \
             --device /dev:/dev \
             -e DISPLAY=":0.0" \

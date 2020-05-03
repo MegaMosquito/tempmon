@@ -34,8 +34,11 @@ from flask import Flask
 
 
 # Is this the indoor one (the "master"), or the outdoor one (the "slave")?
-MASTER = True
-SLAVE_IP = '192.168.123.96' # The SLAVE_IP field is ignored when MASTER is False
+MASTER = False
+
+# How to connect to the slave *host* (host port bound to the container)
+SLAVE_IP = '192.168.123.96' # SLAVE_IP is ignored when MASTER is False
+SLAVE_PORT = '80'           # SLAVE_PORT is ignored when MASTER is False
 
 # How long between cycle of the main loop
 SAMPLE_INTERVAL_IN_SEC = 10
@@ -71,7 +74,7 @@ PURPLE = (192, 0, 192)
 
 # Constants
 FLASK_BIND_ADDRESS = '0.0.0.0'
-FLASK_PORT = 6006
+FLASK_BIND_PORT = 80
 
 from flask import Flask
 from flask import send_file
@@ -105,7 +108,7 @@ def get_temperatures():
     # If this is the master, get the temperature fromn the slave
     if MASTER:
       inTempF1 = localTempF1
-      data = urllib2.urlopen('http://' + SLAVE_IP + ':' + str(FLASK_PORT) + '/temp')
+      data = urllib2.urlopen('http://' + SLAVE_IP + ':' + str(SLAVE_PORT) + '/temp')
       j = json.load(data)
       slaveTempC = j['temp-C']
       slaveTempF = (32.0 + 9.0 * slaveTempC / 5.0)
@@ -239,7 +242,7 @@ def tempmon(sideways):
 # Entry point for URL, "/temp"
 @webpage.route('/temp')
 def temp_route():
-  return '{"temp-C":' + localTempC + '}\n'
+  return '{"temp-C":' + str(localTempC) + '}\n'
 
 # Entry point for URL, "/"
 @webpage.route('/')
@@ -253,9 +256,10 @@ def sideways_route(sideways):
 
 if __name__ == '__main__':
 
-  # Start the pygame thread (which handles the drawing on the TFT screen)
-  s = threading.Thread(target=screen_handler, args=())
-  s.start()
+  if MASTER:
+    # Start the thread which handles the drawing on the TFT screen (MASTER only)
+    s = threading.Thread(target=screen_handler, args=())
+    s.start()
 
   # Start the temperature collection thread
   t = threading.Thread(target=get_temperatures, args=())
@@ -264,7 +268,7 @@ if __name__ == '__main__':
   # Fire up the webpage thread (turn off reloader and debug for pygame)
   webpage.debug = False
   webpage.use_reloader = False
-  webpage.run(host='0.0.0.0', port=80)
+  webpage.run(host=FLASK_BIND_ADDRESS, port=FLASK_BIND_PORT)
 
 #   '      setInterval(function() {\n' + \
 #   '        try {\n' + \
