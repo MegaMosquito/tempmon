@@ -44,13 +44,13 @@ SLAVE_IP = '192.168.123.96' # SLAVE_IP is ignored when MASTER is False
 SLAVE_PORT = '80'           # SLAVE_PORT is ignored when MASTER is False
 
 # How long between cycle of the main loop
-SAMPLE_INTERVAL_IN_SEC = 10
+SAMPLE_INTERVAL_SECS = 10
 
 # How long without a temperature update from slave before "master" complains?
 SLAVE_TIMEOUT_SECS = (5 * 60)
 
 # Javascript page load timeout
-RELOAD_TIMEOUT_SECs = (2 * 30)
+RELOAD_TIMEOUT_SECS = (2 * 30)
 
 # How many consecutive reload failures before complaining server "unreachable"
 RELOAD_FAILURE_MAX = 3
@@ -124,7 +124,7 @@ def get_temperatures():
       updated = datetime.datetime.now()
 
     # Chill out for a while
-    time.sleep(SAMPLE_INTERVAL_IN_SEC)
+    time.sleep(SAMPLE_INTERVAL_SECS)
 
 # Functions needed only on the "master":
 if MASTER:
@@ -196,13 +196,12 @@ def tempmon(sideways):
   update_str = "* Last update: " + updated.strftime('%a, %b %-d at %-I:%M%p')
   elapsed = time.time() - last
   update_info = ''
-  if elapsed > COMPLAIN_AFTER_SECS:
+  if elapsed > SLAVE_TIMEOUT_SECS:
     update_info = '' + \
     '      ctx.font = "bolder 80px Arial";\n' + \
     '      ctx.fillStyle = "red";\n' + \
     '      ctx.fillText("' + update_str + '", canvas.width/2, canvas.height/2 + 700);\n' + \
     ''
-  # '    <meta http-equiv="refresh" content="20">\n' + \
   return \
     '<!DOCTYPE html>\n' + \
     '<html>\n' + \
@@ -217,6 +216,7 @@ def tempmon(sideways):
     '        height: 100%;\n' + \
     '      }\n' + \
     '    </style>\n' + \
+    '    <meta http-equiv="refresh" content="' + str(RELOAD_TIMEOUT_SECS) + '">\n' + \
     '  </head>\n' + \
     '  <body">\n' + \
     '    <canvas id="tempmon", width=2000, height=2000></canvas>\n' + \
