@@ -1,10 +1,5 @@
 # Web UI for my indoor/outdoortemperature monitor
 
-
-# I really shouldn't put this in git. :-)
-MY_OPENWEATHERMAP_APP_ID = '4a9bd3166311f9bb805b9a1fedb6f230'
-
-
 # ----------------------------------------------------------------------------
 
 IMAGE_NAME := 'ibmosquito/tempmon:1.0.0'
@@ -27,17 +22,24 @@ clean:
 # ----------------------------------------------------------------------------
 
 dev:
+	#xhost +
 	-docker rm -f tempmon 2>/dev/null || :
 	docker run -it -p 0.0.0.0:8000:6543 \
             --name tempmon --privileged --restart unless-stopped \
-            -e MY_OPENWEATHERMAP_APP_ID=$(MY_OPENWEATHERMAP_APP_ID) \
-            $(IMAGE_NAME) /bin/sh
+            --device /dev:/dev \
+            -e DISPLAY=":0.0" \
+            -v /tmp/.X11-unix:/tmp/.X11-unix \
+            -v `pwd`:/outside \
+            $(IMAGE_NAME) /bin/bash
 
 run:
+	#xhost +
 	-docker rm -f tempmon 2>/dev/null || :
 	docker run -d -p 0.0.0.0:80:6543 \
             --name tempmon --privileged --restart unless-stopped \
-            -e MY_OPENWEATHERMAP_APP_ID=$(MY_OPENWEATHERMAP_APP_ID) \
+            --device /dev:/dev \
+            -e DISPLAY=":0.0" \
+            -v /tmp/.X11-unix:/tmp/.X11-unix \
             $(IMAGE_NAME)
 
 

@@ -1,15 +1,24 @@
-#!/usr/bin/python2
+#!/usr/bin/python
 
-# Uses this hardware:
+# Expecting this hardware on the indoor ("master") temperature monitor::
 #   https://www.adafruit.com/product/2315
-# And follow the "installer script" instructions, here:
+# Based on the ILI9340:
+#   https://cdn-shop.adafruit.com/datasheets/ILI9340.pdf
+#
+# *** HOST PREPARATION REQUIRED ***
+#
+# Follow the "installer script" instructions, here:
 #   https://learn.adafruit.com/adafruit-2-2-pitft-hat-320-240-primary-display-for-raspberry-pi/easy-install
-# Run their "adafruit-pitft.sh" script, answering as follows:
+# I.e., install their "adafruit-pitft.sh" script on the host, answering as follows:
 #   Make these choices at the script prompts:
 #     - PiTFT 2.2" no touch (240x320)
-#     - 270 degrees (landscape)
+#     - 90 degrees (landscape)
 #     - do *not* show console on PITFT
 #     - do mirror PITFT on HDMI
+#     - then allow the reboot
+#   Or maybe this would work:
+#     echo "2\n1\nn\ny\ny\n" | adafruit-pitft.sh
+#
 
  
 import pygame
@@ -24,38 +33,30 @@ import datetime
 from flask import Flask
 
 
-# These values need to be provided from the host
-MY_OPENWEATHERMAP_APP_ID = os.environ['MY_OPENWEATHERMAP_APP_ID']
+# Is this the indoor one (the "master"), or the outdoor one (the "slave")?
+MASTER = True
+SLAVE_IP = '192.168.123.96' # The SLAVE_IP field is ignored when MASTER is False
 
+# How long between cycle of the main loop
+SAMPLE_INTERVAL_IN_SEC = 10
 
-# How many seconds must elapse without a temperature update before complaining?
-COMPLAIN_AFTER_SECS = (5 * 60)
+# How long without a temperature update from slave before "master" complains?
+SLAVE_TIMEOUT_SECS = (5 * 60)
 
-# When to reload the data from the server
-RELOAD_INTERVAL_SECS = 20
+# Javascript page load timeout
+RELOAD_TIMEOUT_SECs = (2 * 30)
 
-# How many reload failures before complaining
+# How many consecutive reload failures before complaining server "unreachable"
 RELOAD_FAILURE_MAX = 3
 
 # For the BMP180 sensor, use the Adafruit library
 import Adafruit_BMP.BMP085 as BMP085 # Imports the BMP library
-
-# Get your "APPID" at https://home.openweathermap.org/ (they email it to you)
-OPENWEATHERAPI = 'http://api.openweathermap.org/data/2.5/weather?APPID=4a9bd3166311f9bb805b9a1fedb6f230&lat=37.273246&lon=-121.881315'
 
 # Create a BMP085 object to poll the BMP180 for indoor temperature data
 BMP180 = BMP085.BMP085()
 
 # Create the Flask instance that provides the web page
 webpage = Flask(__name__)
-
-# Configure access to the data source in my weather station
-URL = "http://192.168.123.98/livedata.htm"
-SAMPLE_INTERVAL_IN_SEC = 60
-
-# Configure for Twillio
-user = "darlings.applicances@gmail.com"
-pw = "IhOdHCVzj6Z1a4na0VJ26VajFMswsK8lCEOJjKOJ"
 
 # Configure the screen (physical size is 320x240)
 SCREENSIZE = (640, 480)
@@ -68,128 +69,114 @@ GREEN = (0, 255, 0)
 RED = (255, 0, 0)
 PURPLE = (192, 0, 192)
 
-# Configure GPIO #17, #22, #23, #27, for the 4 buttons
-BUTTON0 = 17
-BUTTON1 = 22
-BUTTON2 = 23
-BUTTON3 = 27
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(BUTTON0, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-GPIO.setup(BUTTON1, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-GPIO.setup(BUTTON2, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-GPIO.setup(BUTTON3, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-
-
-# External probing target
-EXTERNAL_PROBE_TARGET = 'https://www.google.com/'
-
 # Constants
 FLASK_BIND_ADDRESS = '0.0.0.0'
 FLASK_PORT = 6006
 
-  from flask import Flask
-  from flask import send_file
-  webapp = Flask('tempmon')
-
-
+from flask import Flask
+from flask import send_file
+webapp = Flask('tempmon')
 
 # Globals
-inTemp = -9999.0
-outTemp = 9999.0
+localTempC = -9999.0
+inTempF1 = -9999.0
+outTempF1 = 9999.0
 last = time.time() # Last update time in seconds
 updated = datetime.datetime.now() # Last update date and time
 
 # This function is a separate thread to call extract() periodically
 def get_temperatures():
 
-  global inTemp
-  global outTemp
+  global localTempC
+  global outTempF
   global updated
   global last
 
   while True:
 
-    # Get the indoor temperature from the BMP180 sensor directly attached
-    inTempC = BMP180.read_temperature()
-    inTempX = (32.0 + 9.0 * inTempC / 5.0)
-    inTemp = int(inTempX * 10.0) / 10.0
-    inTemp -= 5 # My BMP180 is always pretty much exactly 5 degrees off!!
-    #print ("<-- inTemp (", inTemp, ")")
+    # Get the temperature from the BMP180 sensor directly attached
+    localTempC = BMP180.read_temperature()
+    localTempC -= 3 # BMP180 seems to be about 3 degrees C off!!
+    localTempF = (32.0 + 9.0 * localTempC / 5.0)
+    localTempC1 = int(localTempC * 10.0) / 10.0
+    localTempF1 = int(localTempF * 10.0) / 10.0
+    print ("<-- localTemp (%0.1fC, %0.1fF)" % (localTempC1, localTempF1))
 
-    # Get data from the openweathermap.org REST API
-    data = urllib2.urlopen(OPENWEATHERAPI)
-    j = json.load(data)
-    outTempK = j['main']['temp']
-    outTempX = (32.0 + 9.0 * (outTempK - 273.15) / 5.0)
-    outTemp = int(outTempX * 10.0) / 10.0
-    #print ("<-- outTemp (", outTemp, ")")
-    # Note the time of this update
-    last = time.time()
-    updated = datetime.datetime.now()
+    # If this is the master, get the temperature fromn the slave
+    if MASTER:
+      inTempF1 = localTempF1
+      data = urllib2.urlopen('http://' + SLAVE_IP + ':' + str(FLASK_PORT) + '/temp')
+      j = json.load(data)
+      slaveTempC = j['temp-C']
+      slaveTempF = (32.0 + 9.0 * slaveTempC / 5.0)
+      slaveTempC1 = int(slaveTempC * 10.0) / 10.0
+      slaveTempF1 = int(slaveTempF * 10.0) / 10.0
+      print ("<-- slaveTemp (%0.1fC, %0.1fF)" % (slaveTempC1, slaveTempF1))
+      outTempF1 = slaveTempF1
+      # Note the time of this update
+      last = time.time()
+      updated = datetime.datetime.now()
 
-    # Chill out for a while so as not to pound the weatherstation API too hard
+    # Chill out for a while
     time.sleep(SAMPLE_INTERVAL_IN_SEC)
 
-# This function is a thread to operate the pygame loop for each frame
-def screen_handler():
+# Functions needed only on the "master":
+if MASTER:
 
-  screen = pygame.display.set_mode(SCREENSIZE)
-  pygame.display.set_caption("Temperature Monitor")
-  pygame.mouse.set_visible(False)
+  # This function is a thread to operate the pygame loop for each frame
+  def screen_handler():
 
-  while True:
-    # Handle keyboard and mouse events (not relevant for the headless RPi)
-    done = False
-    for event in pygame.event.get():  # User did something
-      if event.type == pygame.QUIT:  # If user clicked close
-        done = True  # Flag that we are done so we exit this loop
-      if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-        done = True
-    if done:
-      pygame.quit()
-      sys.exit(0)
+    screen = pygame.display.set_mode(SCREENSIZE)
+    pygame.display.set_caption("Temperature Monitor")
+    pygame.mouse.set_visible(False)
 
-    # Check the GPIO buttons:
-    button0 = GPIO.input(BUTTON0) == GPIO.LOW
-    button1 = GPIO.input(BUTTON1) == GPIO.LOW
-    button2 = GPIO.input(BUTTON2) == GPIO.LOW
-    button3 = GPIO.input(BUTTON3) == GPIO.LOW
-    #print("B0:", button0, "- B1:", button1, "- B2:", button2, "- B3:", button3)
+    while True:
 
-    # Clear the screen and set the screen background
-    screen.fill(BLACK)
+      # Handle keyboard and mouse events (not relevant for the headless RPi)
+      done = False
+      for event in pygame.event.get():  # User did something
+        if event.type == pygame.QUIT:  # If user clicked close
+          done = True  # Flag that we are done so we exit this loop
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+          done = True
+      if done:
+        pygame.quit()
+        sys.exit(0)
+
+      # Clear the screen and set the screen background
+      screen.fill(BLACK)
  
-    # Print text with selected font, size, bold, italics
-    font = pygame.font.SysFont('Calibri', 300, True, False)
-    smallfont = pygame.font.SysFont('Calibri', 45, True, False)
+      # Print text with selected font, size, bold, italics
+      font = pygame.font.SysFont('Calibri', 300, True, False)
+      smallfont = pygame.font.SysFont('Calibri', 45, True, False)
 
-    # Set color based on relative temperature
-    color = RED
-    if (inTemp > outTemp):
-      color = GREEN
+      # Set color based on relative temperature
+      color = RED
+      if (inTempF1 > outTempF1):
+        color = GREEN
 
-    # Outdoor temperature on top
-    text = font.render(str(outTemp) + "F", True, color)
-    text = pygame.transform.rotate(text, 0)
-    screen.blit(text, [SCREENSIZE[0] // 2 - text.get_width() // 2, 10])
+      # Outdoor temperature on top
+      text = font.render(str(outTempF1) + "F", True, color)
+      text = pygame.transform.rotate(text, 0)
+      screen.blit(text, [SCREENSIZE[0] // 2 - text.get_width() // 2, 10])
 
-    # Indoor temperature below that
-    text = font.render(str(inTemp) + "F", True, BLUE)
-    text = pygame.transform.rotate(text, 0)
-    screen.blit(text, [SCREENSIZE[0] // 2 - text.get_width() // 2, 230])
+      # Indoor temperature below that
+      text = font.render(str(inTempF1) + "F", True, BLUE)
+      text = pygame.transform.rotate(text, 0)
+      screen.blit(text, [SCREENSIZE[0] // 2 - text.get_width() // 2, 230])
 
-    # Show last update time at bottom in fine print
-    update_str = updated.strftime('%a, %b %-d at %-I:%M%p')
-    text = smallfont.render("(" + str(update_str) + ")", True, PURPLE)
-    text = pygame.transform.rotate(text, 0)
-    screen.blit(text, [SCREENSIZE[0] // 2 - text.get_width() // 2, 440])
+      # Show last update time at bottom in fine print
+      update_str = updated.strftime('%a, %b %-d at %-I:%M%p')
+      text = smallfont.render("(" + str(update_str) + ")", True, PURPLE)
+      text = pygame.transform.rotate(text, 0)
+      screen.blit(text, [SCREENSIZE[0] // 2 - text.get_width() // 2, 440])
  
-    # Go ahead and update the screen with what we've drawn.
-    # This MUST happen after all the other drawing commands.
-    pygame.display.flip()
+      # Go ahead and update the screen with what we've drawn.
+      # This MUST happen after all the other drawing commands.
+      pygame.display.flip()
  
-    # Pause the while loop for a while (in milliseconds) before repeating
-    pygame.time.wait(100)
+      # Pause the while loop for a while (in milliseconds) before repeating
+      pygame.time.wait(100)
 
 # This routine implements the web page
 def tempmon(sideways):
@@ -198,7 +185,7 @@ def tempmon(sideways):
     rot = 'Math.PI / 2'
   # Set color based on relative temperature
   color = 'red'
-  if (inTemp > outTemp):
+  if (inTempF1 > outTempF1):
     color = 'green'
   update_str = "* Last update: " + updated.strftime('%a, %b %-d at %-I:%M%p')
   elapsed = time.time() - last
@@ -229,8 +216,8 @@ def tempmon(sideways):
     '    <canvas id="tempmon", width=2000, height=2000></canvas>\n' + \
     '    <script>\n' + \
     '      var fails = 0;\n' + \
-    '      var outTemp = ' + str(outTemp) + ';\n' + \
-    '      var inTemp = ' + str(inTemp) + ';\n' + \
+    '      var outTempF1 = ' + str(outTempF1) + ';\n' + \
+    '      var inTempF1 = ' + str(inTempF1) + ';\n' + \
     '      var canvas = document.getElementById("tempmon");\n' + \
     '      var ctx = canvas.getContext("2d");\n' + \
     '      ctx.fillStyle = "black";\n' + \
@@ -241,13 +228,18 @@ def tempmon(sideways):
     '      ctx.font = "bolder 320px Arial";\n' + \
     '      ctx.textAlign = "center";\n' + \
     '      ctx.fillStyle = "' + color + '";\n' + \
-    '      ctx.fillText("Out: " + (outTemp.toFixed(1)) + "F", canvas.width/2, canvas.height/2 - 180);\n' + \
+    '      ctx.fillText("Out: " + (outTempF1.toFixed(1)) + "F", canvas.width/2, canvas.height/2 - 180);\n' + \
     '      ctx.fillStyle = "blue";\n' + \
-    '      ctx.fillText(" In: " + (inTemp.toFixed(1)) + "F", canvas.width/2, canvas.height/2 + 180);\n' + \
+    '      ctx.fillText(" In: " + (inTempF1.toFixed(1)) + "F", canvas.width/2, canvas.height/2 + 180);\n' + \
            update_info + \
     '    </script>\n' + \
     '  </body>\n' + \
     '</html>\n'
+
+# Entry point for URL, "/temp"
+@webpage.route('/temp')
+def temp_route():
+  return '{"temp-C":' + localTempC + '}\n'
 
 # Entry point for URL, "/"
 @webpage.route('/')
