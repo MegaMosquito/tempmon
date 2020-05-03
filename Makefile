@@ -29,8 +29,10 @@ dev:
 	#xhost +
 	-docker rm -f tempmon 2>/dev/null || :
 	docker run -it \
+            --name tempmon \
+            --privileged \
             -p 0.0.0.0:80:80 \
-            --name tempmon --privileged --restart unless-stopped \
+            --name tempmon --privileged \
             --device /dev:/dev \
             -e DISPLAY=":0.0" \
             -v /tmp/.X11-unix:/tmp/.X11-unix \
@@ -40,12 +42,12 @@ dev:
 run:
 	#xhost +
 	-docker rm -f tempmon 2>/dev/null || :
-	docker run -d \
+	docker run -d --restart unless-stopped \
+            --name tempmon \
+            --privileged \
             -p 0.0.0.0:80:80 \
-            --name tempmon --privileged --restart unless-stopped \
             --device /dev:/dev \
             -e DISPLAY=":0.0" \
             -v /tmp/.X11-unix:/tmp/.X11-unix \
             $(IMAGE_NAME)
-
 
