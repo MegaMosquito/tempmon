@@ -21,8 +21,14 @@
 #
 
  
-import pygame
-pygame.init()
+# Is this the indoor one (the "master"), or the outdoor one (the "slave")?
+MASTER = False
+
+# Only setup pygame if this is the MASTER
+if MASTER:
+  import pygame
+  pygame.init()
+
 import RPi.GPIO as GPIO
 import sys
 import json
@@ -32,9 +38,6 @@ import time
 import datetime
 from flask import Flask
 
-
-# Is this the indoor one (the "master"), or the outdoor one (the "slave")?
-MASTER = False
 
 # How to connect to the slave *host* (host port bound to the container)
 SLAVE_IP = '192.168.123.96' # SLAVE_IP is ignored when MASTER is False
