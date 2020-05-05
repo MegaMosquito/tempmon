@@ -58,14 +58,6 @@ class MyScreen(threading.Thread):
 
   def __init__(self):
     threading.Thread.__init__(self)
-    # Setup the backlight brightness
-    GPIO.setwarnings(False)
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(18, GPIO.OUT)
-    PWM_FREQUENCY = 2000
-    backlight_percent = GPIO.PWM(18, PWM_FREQUENCY)
-    backlight_percent.start(60)
-    # Initialize the screen
     self.screen = pygame.display.init()
     self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN|pygame.NOFRAME, 0, 0)
     pygame.display.set_caption("Temperature Monitor")
@@ -86,6 +78,16 @@ class MyScreen(threading.Thread):
     self.done = True
 
   def run(self):
+
+    # Setup the backlight brightness (do this after initializing the screen)
+    #GPIO.setwarnings(False)
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(18, GPIO.OUT)
+    PWM_FREQUENCY = 2000
+    backlight_percent = GPIO.PWM(18, PWM_FREQUENCY)
+    backlight_percent.start(20)
+
+    # PyGame looping forever
     while not self.done:
 
       debug("--> inTempF=%0.1fF, outTempF=%0.1fF" % (self.inTempF, self.outTempF))
@@ -157,7 +159,7 @@ if __name__ == '__main__':
   while True:
     my_screen.set_inside(n)
     my_screen.set_outside(n)
-    n+=10
+    n+=5
     if n > 110: n = 50
     time.sleep(1)
 
