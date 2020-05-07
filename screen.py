@@ -40,6 +40,7 @@ BLUE = (0, 0, 255)
 GREEN = (0, 255, 0)
 RED = (255, 0, 0)
 PURPLE = (192, 0, 192)
+GRAY = (128, 128, 128)
 
 # Basic disablable logging
 DEBUG = False
@@ -51,7 +52,8 @@ def debug(s):
 class MyScreen(threading.Thread):
 
   # Configure the screen drawing size (physical size is 320x240)
-  SCREENSIZE = (320, 240)
+  #SCREENSIZE = (320, 240)
+  SCREENSIZE = (720, 480)
 
   # Pause betweens cycles of the pygame main loop (in milliseconds)
   PAUSE_BETWEEN_LOOPS_MSEC = 100
@@ -97,8 +99,8 @@ class MyScreen(threading.Thread):
       self.screen.fill(BLACK)
  
       # Print text with selected font, size, bold, italics
-      font = pygame.font.SysFont('Calibri', 100, True, False)
-      smallfont = pygame.font.SysFont('Calibri', 20, True, False)
+      font = pygame.font.SysFont('Calibri', 220, True, False)
+      smallfont = pygame.font.SysFont('Calibri', 50, True, False)
 
       # Set color based on relative temperature
       color = RED
@@ -108,18 +110,19 @@ class MyScreen(threading.Thread):
       # Outdoor temperature on top
       text = font.render(("%0.1fF" % self.outTempF), True, color)
       text = pygame.transform.rotate(text, 0)
-      self.screen.blit(text, [MyScreen.SCREENSIZE[0] // 2 - text.get_width() // 2, 45])
+      self.screen.blit(text, [MyScreen.SCREENSIZE[0] // 2 - text.get_width() // 2, 70])
 
       # Indoor temperature below that
       text = font.render(("%0.1fF" % self.inTempF), True, BLUE)
       text = pygame.transform.rotate(text, 0)
-      self.screen.blit(text, [MyScreen.SCREENSIZE[0] // 2 - text.get_width() // 2, 125])
+      self.screen.blit(text, [MyScreen.SCREENSIZE[0] // 2 - text.get_width() // 2, 220])
 
       # Show last update time at bottom in a small font
       #update_str = updated.strftime('%a, %b %-d at %-I:%M%p')
-      #text = smallfont.render("(" + str(update_str) + ")", True, PURPLE)
-      #text = pygame.transform.rotate(text, 0)
-      #self.screen.blit(text, [MyScreen.SCREENSIZE[0] // 2 - text.get_width() // 2, 220])
+      update_str = "update info goes here"
+      text = smallfont.render("(" + str(update_str) + ")", True, GRAY)
+      text = pygame.transform.rotate(text, 0)
+      self.screen.blit(text, [MyScreen.SCREENSIZE[0] // 2 - text.get_width() // 2, 400])
  
       # Go ahead and update the screen with what we've drawn.
       # This MUST happen after all the other drawing commands.

@@ -31,7 +31,7 @@ import threading
 
 
 # Basic disablable logging
-DEBUG = True
+DEBUG = False
 def debug(s):
   if DEBUG: print(s)
 
@@ -142,7 +142,7 @@ if __name__ == '__main__':
   if 'yes' == MASTER:
 
     # Construct the URL for getting the slave's temperature
-    SLAVE_TEMP_URL = 'http://' + SLAVE_IP + ':' + SLAVE_PORT
+    SLAVE_TEMP_URL = 'http://' + SLAVE_IP + ':' + SLAVE_PORT + '/temp-F'
 
     # Create a new screen handler object
     my_screen = MyScreen()
@@ -172,8 +172,9 @@ if __name__ == '__main__':
 
     # If this is the MASTER, then get remote temperature and deal with it
     if 'yes' == MASTER:
-      try:
+      # try:
         # Try to get it fom the slave
+        debug("--> URL=\"%s\"" % SLAVE_TEMP_URL)
         r = requests.get(SLAVE_TEMP_URL)
         if (r.status_code <= 299):
           # Got it. Decode, and tell REST server and screen about it
@@ -186,9 +187,9 @@ if __name__ == '__main__':
         else:
           # Remote REST server gave an error code
           debug ("--> (local: %0.1fF, remote: *ERROR*)" % localTempF)
-      except:
+      # except:
         # Remote REST server was unreachable
-        debug ("--> (local: %0.1fF, remote: *UNREACHABLE*)" % localTempF)
+      #   debug ("--> (local: %0.1fF, remote: *UNREACHABLE*)" % localTempF)
     else:
       # Running as SLAVE, only local temperature is available
       debug ("--> (local: %0.1fF)" % localTempF)
