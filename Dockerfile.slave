@@ -1,0 +1,27 @@
+FROM raspbian/stretch
+
+RUN apt update && apt install -y \
+  python \
+  python-dev \
+  python-pip \
+  git \
+  bash \
+  curl \
+  jq
+
+# Grab Adafruit BMP library source, then build and install
+WORKDIR /opt
+RUN git clone https://github.com/sunfounder/Adafruit_Python_BMP.git
+WORKDIR /opt/Adafruit_Python_BMP
+RUN python setup.py install
+
+# Install other dependencies
+RUN pip install RPI.GPIO
+
+# Copy over all the code
+WORKDIR /
+COPY *.py /
+
+# Default command is to launch the daemon
+CMD python tempmon.py
+

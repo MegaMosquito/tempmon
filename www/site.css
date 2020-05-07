@@ -1,0 +1,16 @@
+@keyframes monitor-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.monitor-logo {
+  animation: monitor-logo-spin infinite 16s linear;
+  height: calc(2.5%);
+  width: calc(2.5%);
+  pointer-events: none;
+}
+

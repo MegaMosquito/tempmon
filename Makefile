@@ -2,21 +2,24 @@
 
 # ----------------------------------------------------------------------------
 
-IMAGE_NAME := 'ibmosquito/tempmon:1.0.0'
+IMAGE_NAME_MASTER := 'ibmosquito/tempmon_master:1.0.0'
+IMAGE_NAME_SLAVE  := 'ibmosquito/tempmon_slave:1.0.0'
 
 all: build run
 
-# Build the docker container
+# Build the docker containers
 build:
-	docker build -t $(IMAGE_NAME) -f ./Dockerfile .
+	docker build -t $(IMAGE_NAME_MASTER) -f ./Dockerfile.master .
+	docker build -t $(IMAGE_NAME_SLAVE) -f ./Dockerfile.slave .
 
-# Push the docker container to DockerHub
+# Push the docker containers to DockerHub
 push:
-	docker push $(IMAGE_NAME)
+	docker push $(IMAGE_NAME_MASTER)
+	docker push $(IMAGE_NAME_SLAVE)
 
 # Test local temperature REST API
 test:
-	curl -sS http://localhost:80/temp | jq .
+	curl -sS http://localhost:80/temp-C | jq .
 
 # Remove the local container image
 clean:
@@ -26,28 +29,45 @@ clean:
 # ----------------------------------------------------------------------------
 
 dev:
-	#xhost +
+	env DISPLAY=:0.0 xhost +
+	sudo rm -f core
 	-docker rm -f tempmon 2>/dev/null || :
 	docker run -it \
             --name tempmon \
             --privileged \
             -p 0.0.0.0:80:80 \
-            --name tempmon --privileged \
             --device /dev:/dev \
+            -e MASTER="yes" \
+            -e SLAVE_IP="192.168.123.96" \
+            -e SLAVE_PORT="7032" \
             -e DISPLAY=":0.0" \
             -v /tmp/.X11-unix:/tmp/.X11-unix \
+            -v ~/.Xauthority:/root/.Xauthority \
             -v `pwd`:/outside \
-            $(IMAGE_NAME) /bin/bash
+            $(IMAGE_NAME_MASTER) /bin/bash
 
-run:
-	#xhost +
+master:
+	env DISPLAY=:0.0 xhost +
 	-docker rm -f tempmon 2>/dev/null || :
 	docker run -d --restart unless-stopped \
             --name tempmon \
             --privileged \
             -p 0.0.0.0:80:80 \
             --device /dev:/dev \
+            -e MASTER="yes" \
+            -e SLAVE_IP="192.168.123.96" \
+            -e SLAVE_PORT="7032" \
             -e DISPLAY=":0.0" \
             -v /tmp/.X11-unix:/tmp/.X11-unix \
-            $(IMAGE_NAME)
+            -v ~/.Xauthority:/root/.Xauthority \
+            $(IMAGE_NAME_MASTER)
+
+slave:
+	-docker rm -f tempmon 2>/dev/null || :
+	docker run -d --restart unless-stopped \
+            --name tempmon \
+            --privileged \
+            -p 0.0.0.0:7032:7032 \
+            --device /dev:/dev \
+            $(IMAGE_NAME_SLAVE)
 

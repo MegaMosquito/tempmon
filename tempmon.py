@@ -20,40 +20,68 @@
 #     echo "2\n1\nn\ny\ny\n" | adafruit-pitft.sh
 #
 
- 
-# Is this the indoor one (the "master"), or the outdoor one (the "slave")?
-MASTER = False
-
-# Only setup pygame if this is the MASTER
-if MASTER:
-  import pygame
-  pygame.init()
-
-import RPi.GPIO as GPIO
+import os
 import sys
 import json
 import urllib2
-import threading
+import signal
 import time
 import datetime
-from flask import Flask
+import threading
 
 
-# How to connect to the slave *host* (host port bound to the container)
-SLAVE_IP = '192.168.123.96' # SLAVE_IP is ignored when MASTER is False
-SLAVE_PORT = '80'           # SLAVE_PORT is ignored when MASTER is False
+# Basic disablable logging
+DEBUG = True
+def debug(s):
+  if DEBUG: print(s)
 
-# How long between cycle of the main loop
-SAMPLE_INTERVAL_SECS = 10
 
-# How long without a temperature update from slave before "master" complains?
-SLAVE_TIMEOUT_SECS = (5 * 60)
+# Configuration from the environment
+def get_from_env(v, d):
+  if v in os.environ and '' != os.environ[v]:
+    return os.environ[v]
+  else:
+    return d
+MASTER = get_from_env('MASTER', '')
+SLAVE_IP = get_from_env('SLAVE_IP', '')
+SLAVE_PORT = get_from_env('SLAVE_PORT', '7032')
+DISPLAY = get_from_env('DISPLAY', ':0.0')
 
-# Javascript page load timeout
-RELOAD_TIMEOUT_SECS = (2 * 30)
 
-# How many consecutive reload failures before complaining server "unreachable"
-RELOAD_FAILURE_MAX = 3
+# Local modules
+from temp import Temp
+from rest import RestServer
+if 'yes' == MASTER:
+  from screen import MyScreen
+  from web import WebServer
+
+
+# Log setup info
+print("\n\n\n")
+print("****************************************")
+print("****************************************")
+print("****")
+if 'yes' == MASTER:
+  print("****   RUNNING AS MASTER!")
+  print("****   Slave at: " + SLAVE_IP + ":" + str(SLAVE_PORT))
+else:
+  print("****   RUNNING AS SLAVE!")
+print("****")
+print("****************************************")
+print("****************************************")
+print("\n\n\n")
+
+
+# Only setup pygame if this is the MASTER
+if 'yes' == MASTER:
+  import pygame
+  pygame.init()
+
+
+# Only setup for making web requests if this is the MASTER
+if 'yes' == MASTER:
+  import requests
+
 
 # For the BMP180 sensor, use the Adafruit library
 import Adafruit_BMP.BMP085 as BMP085 # Imports the BMP library
@@ -61,235 +89,110 @@ import Adafruit_BMP.BMP085 as BMP085 # Imports the BMP library
 # Create a BMP085 object to poll the BMP180 for indoor temperature data
 BMP180 = BMP085.BMP085()
 
-# Create the Flask instance that provides the web page
-webpage = Flask(__name__)
-
-# Configure the screen (physical size is 320x240)
-SCREENSIZE = (640, 480)
- 
-# Define some colors
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
-BLUE = (0, 0, 255)
-GREEN = (0, 255, 0)
-RED = (255, 0, 0)
-PURPLE = (192, 0, 192)
 
 # Constants
-FLASK_BIND_ADDRESS = '0.0.0.0'
-FLASK_BIND_PORT = 80
+REST_BIND_ADDRESS = '0.0.0.0'
+REST_BIND_PORT = 7032
+if 'yes' == MASTER:
+  WEB_BIND_ADDRESS = '0.0.0.0'
+  WEB_BIND_PORT = 80
+  # Directory where the web server files will be served from
+  SERVER_DIR = './www/'
 
-from flask import Flask
-from flask import send_file
-webapp = Flask('tempmon')
 
 # Globals
-localTempC = -9999.0
-inTempF1 = -9999.0
-outTempF1 = 9999.0
-last = time.time() # Last update time in seconds
-updated = datetime.datetime.now() # Last update date and time
+done = False
+temp = None
+rest_server = None
+if 'yes' == MASTER:
+  my_screen = None
+  web_server = None
 
-# This function is a separate thread to call extract() periodically
-def get_temperatures():
 
-  global localTempC
-  global outTempF
-  global updated
-  global last
+# Signal handler for clean exit
+def signal_handler(sig, frame):
+  debug('\n\n***** Received signal: {}'.format(sig))
+  global done
+  done = True
+  temp.stop()
+  rest_server.stop()
+  if 'yes' == MASTER:
+    my_screen.stop()
+    web_server.stop()
+  time.sleep(0.5)
+  sys.exit(0)
 
-  while True:
 
-    # Get the temperature from the BMP180 sensor directly attached
-    localTempC = BMP180.read_temperature()
-    localTempC -= 3 # BMP180 seems to be about 3 degrees C off!!
-    localTempF = (32.0 + 9.0 * localTempC / 5.0)
-    localTempC1 = int(localTempC * 10.0) / 10.0
-    localTempF1 = int(localTempF * 10.0) / 10.0
-    print ("<-- localTemp (%0.1fC, %0.1fF)" % (localTempC1, localTempF1))
-
-    # If this is the master, get the temperature fromn the slave
-    if MASTER:
-      inTempF1 = localTempF1
-      data = urllib2.urlopen('http://' + SLAVE_IP + ':' + str(SLAVE_PORT) + '/temp')
-      j = json.load(data)
-      slaveTempC = j['temp-C']
-      slaveTempF = (32.0 + 9.0 * slaveTempC / 5.0)
-      slaveTempC1 = int(slaveTempC * 10.0) / 10.0
-      slaveTempF1 = int(slaveTempF * 10.0) / 10.0
-      print ("<-- slaveTemp (%0.1fC, %0.1fF)" % (slaveTempC1, slaveTempF1))
-      outTempF1 = slaveTempF1
-      # Note the time of this update
-      last = time.time()
-      updated = datetime.datetime.now()
-
-    # Chill out for a while
-    time.sleep(SAMPLE_INTERVAL_SECS)
-
-# Functions needed only on the "master":
-if MASTER:
-
-  # This function is a thread to operate the pygame loop for each frame
-  def screen_handler():
-
-    screen = pygame.display.set_mode(SCREENSIZE)
-    pygame.display.set_caption("Temperature Monitor")
-    pygame.mouse.set_visible(False)
-
-    while True:
-
-      # Handle keyboard and mouse events (not relevant for the headless RPi)
-      done = False
-      for event in pygame.event.get():  # User did something
-        if event.type == pygame.QUIT:  # If user clicked close
-          done = True  # Flag that we are done so we exit this loop
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-          done = True
-      if done:
-        pygame.quit()
-        sys.exit(0)
-
-      # Clear the screen and set the screen background
-      screen.fill(BLACK)
- 
-      # Print text with selected font, size, bold, italics
-      font = pygame.font.SysFont('Calibri', 300, True, False)
-      smallfont = pygame.font.SysFont('Calibri', 45, True, False)
-
-      # Set color based on relative temperature
-      color = RED
-      if (inTempF1 > outTempF1):
-        color = GREEN
-
-      # Outdoor temperature on top
-      text = font.render(str(outTempF1) + "F", True, color)
-      text = pygame.transform.rotate(text, 0)
-      screen.blit(text, [SCREENSIZE[0] // 2 - text.get_width() // 2, 10])
-
-      # Indoor temperature below that
-      text = font.render(str(inTempF1) + "F", True, BLUE)
-      text = pygame.transform.rotate(text, 0)
-      screen.blit(text, [SCREENSIZE[0] // 2 - text.get_width() // 2, 230])
-
-      # Show last update time at bottom in fine print
-      update_str = updated.strftime('%a, %b %-d at %-I:%M%p')
-      text = smallfont.render("(" + str(update_str) + ")", True, PURPLE)
-      text = pygame.transform.rotate(text, 0)
-      screen.blit(text, [SCREENSIZE[0] // 2 - text.get_width() // 2, 440])
- 
-      # Go ahead and update the screen with what we've drawn.
-      # This MUST happen after all the other drawing commands.
-      pygame.display.flip()
- 
-      # Pause the while loop for a while (in milliseconds) before repeating
-      pygame.time.wait(100)
-
-# This routine implements the web page
-def tempmon(sideways):
-  rot = '0'
-  if '' != sideways:
-    rot = 'Math.PI / 2'
-  # Set color based on relative temperature
-  color = 'red'
-  if (inTempF1 > outTempF1):
-    color = 'green'
-  update_str = "* Last update: " + updated.strftime('%a, %b %-d at %-I:%M%p')
-  elapsed = time.time() - last
-  update_info = ''
-  if elapsed > SLAVE_TIMEOUT_SECS:
-    update_info = '' + \
-    '      ctx.font = "bolder 80px Arial";\n' + \
-    '      ctx.fillStyle = "red";\n' + \
-    '      ctx.fillText("' + update_str + '", canvas.width/2, canvas.height/2 + 700);\n' + \
-    ''
-  return \
-    '<!DOCTYPE html>\n' + \
-    '<html>\n' + \
-    '  <head>\n' + \
-    '    <style>\n' + \
-    '      body {\n' + \
-    '        background-color: black;\n' + \
-    '      }\n' + \
-    '      #tempmon {\n' + \
-    '        position: absolute;\n' + \
-    '        width: 100%;\n' + \
-    '        height: 100%;\n' + \
-    '      }\n' + \
-    '    </style>\n' + \
-    '    <meta http-equiv="refresh" content="' + str(RELOAD_TIMEOUT_SECS) + '">\n' + \
-    '  </head>\n' + \
-    '  <body">\n' + \
-    '    <canvas id="tempmon", width=2000, height=2000></canvas>\n' + \
-    '    <script>\n' + \
-    '      var fails = 0;\n' + \
-    '      var outTempF1 = ' + str(outTempF1) + ';\n' + \
-    '      var inTempF1 = ' + str(inTempF1) + ';\n' + \
-    '      var canvas = document.getElementById("tempmon");\n' + \
-    '      var ctx = canvas.getContext("2d");\n' + \
-    '      ctx.fillStyle = "black";\n' + \
-    '      ctx.fillRect(0, 0, canvas.width, canvas.height);\n' + \
-    '      ctx.translate(canvas.width / 2, canvas.height / 2);\n' + \
-    '      ctx.rotate(' + rot + ');\n' + \
-    '      ctx.translate(- canvas.width / 2, - canvas.height / 2);\n' + \
-    '      ctx.font = "bolder 320px Arial";\n' + \
-    '      ctx.textAlign = "center";\n' + \
-    '      ctx.fillStyle = "' + color + '";\n' + \
-    '      ctx.fillText("Out: " + (outTempF1.toFixed(1)) + "F", canvas.width/2, canvas.height/2 - 180);\n' + \
-    '      ctx.fillStyle = "blue";\n' + \
-    '      ctx.fillText(" In: " + (inTempF1.toFixed(1)) + "F", canvas.width/2, canvas.height/2 + 180);\n' + \
-           update_info + \
-    '    </script>\n' + \
-    '  </body>\n' + \
-    '</html>\n'
-
-# Entry point for URL, "/temp"
-@webpage.route('/temp')
-def temp_route():
-  return '{"temp-C":' + str(localTempC) + '}\n'
-
-# Entry point for URL, "/"
-@webpage.route('/')
-def straight_route():
-  return tempmon('')
-
-# Entry point for URL, "/..."
-@webpage.route('/<sideways>')
-def sideways_route(sideways):
-  return tempmon('sideways')
-
+# The main program, start thread, then update continuously
 if __name__ == '__main__':
 
-  if MASTER:
-    # Start the thread which handles the drawing on the TFT screen (MASTER only)
-    s = threading.Thread(target=screen_handler, args=())
-    s.start()
+  # Install the signal handler
+  signal.signal(signal.SIGTERM, signal_handler)
+  signal.signal(signal.SIGINT, signal_handler)
 
-  # Start the temperature collection thread
-  t = threading.Thread(target=get_temperatures, args=())
-  t.start()
+  # Create a new temp object with specified temp modifier, and polling rate
+  temp = Temp(-3, 1)
+  temp.start()
 
-  # Fire up the webpage thread (turn off reloader and debug for pygame)
-  webpage.debug = False
-  webpage.use_reloader = False
-  webpage.run(host=FLASK_BIND_ADDRESS, port=FLASK_BIND_PORT)
+  # Create a new REST server instance with specified bind address:port
+  rest_server = RestServer(REST_BIND_ADDRESS, REST_BIND_PORT)
+  rest_server.start()
 
-#   '      setInterval(function() {\n' + \
-#   '        try {\n' + \
-#   '          fetch("./")\n' + \
-#   '            .then(data => {\n' + \
-#   '              window.location.reload();\n' + \
-#   '            })\n' + \
-#   '            .catch(err => {\n' + \
-#   '              fails = fails + 1;\n' + \
-#   '              console.log("Cannot load page!  fails=" + fails);\n' + \
-#   '              if (fails > ' + str(RELOAD_FAILURE_MAX) + ') {\n' + \
-#   '                ctx.font = "bolder 80px Arial";\n' + \
-#   '                ctx.fillStyle = "red";\n' + \
-#   '                ctx.fillText("* Server is unreachable!", canvas.width/2, canvas.height/2 + 600);\n' + \
-#   '              }\n' + \
-#   '            });\n' + \
-#   '        }\n' + \
-#   '        catch(err) {\n' + \
-#   '          console.log("Failed to reload page.");\n' + \
-#   '        }\n' + \
-#   '      }\n' + \
+  # If this is the MASTER, setup slave URL, screen thread and web server thread
+  if 'yes' == MASTER:
+
+    # Construct the URL for getting the slave's temperature
+    SLAVE_TEMP_URL = 'http://' + SLAVE_IP + ':' + SLAVE_PORT
+
+    # Create a new screen handler object
+    my_screen = MyScreen()
+    my_screen.start()
+
+    # Create a new web server and bind it to the specified address:port
+    web_server = WebServer(WEB_BIND_ADDRESS, WEB_BIND_PORT)
+    web_server.start()
+
+    # And cache the filenames in the web server
+    # NOTE: These files must be in the SERVER_DIR
+    web_server.add("favicon.ico", 'image/x-icon')
+    web_server.add("index.html", 'text/html')
+    web_server.add("site.css", 'text/css')
+    web_server.add("logo.png", 'image/png')
+
+
+  # Loop forever 
+  while not done:
+
+    # Get the local temperature and update the REST server with it
+    localTempF = temp.f()
+    rest_server.add("temp-F", localTempF)
+    # If this is the MASTER, update it on the screen as well
+    if 'yes' == MASTER:
+      my_screen.set_inside(localTempF)
+
+    # If this is the MASTER, then get remote temperature and deal with it
+    if 'yes' == MASTER:
+      try:
+        # Try to get it fom the slave
+        r = requests.get(SLAVE_TEMP_URL)
+        if (r.status_code <= 299):
+          # Got it. Decode, and tell REST server and screen about it
+          j = r.json()
+          remoteTempF = j['temp-F']
+          my_screen.set_outside(remoteTempF)
+          # Since this is the master, also put this in the REST server
+          rest_server.add("remote-temp-F", remoteTempF)
+          debug ("--> (local: %0.1fF, remote: %0.1fF)" % (localTempF, remoteTempF))
+        else:
+          # Remote REST server gave an error code
+          debug ("--> (local: %0.1fF, remote: *ERROR*)" % localTempF)
+      except:
+        # Remote REST server was unreachable
+        debug ("--> (local: %0.1fF, remote: *UNREACHABLE*)" % localTempF)
+    else:
+      # Running as SLAVE, only local temperature is available
+      debug ("--> (local: %0.1fF)" % localTempF)
+
+    # Pause briefly
+    time.sleep(5)
+

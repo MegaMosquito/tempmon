@@ -74,13 +74,14 @@ class MyScreen(threading.Thread):
 
   def stop(self):
     debug("Terminating screen update loop!")
+    pygame.mouse.set_visible(True)
     GPIO.cleanup()
     self.done = True
 
   def run(self):
 
     # Setup the backlight brightness (do this after initializing the screen)
-    #GPIO.setwarnings(False)
+    GPIO.setwarnings(False)
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(18, GPIO.OUT)
     PWM_FREQUENCY = 2000
@@ -146,13 +147,13 @@ def signal_handler(sig, frame):
 # Test this thing
 if __name__ == '__main__':
 
-  # Create a new temp object with specified temp modifier, and polling rate
-  my_screen = MyScreen()
-  my_screen.start()
-
   # Install the signal handler
   signal.signal(signal.SIGTERM, signal_handler)
   signal.signal(signal.SIGINT, signal_handler)
+
+  # Create a new screen object
+  my_screen = MyScreen()
+  my_screen.start()
 
   # Loop forever
   n = 50

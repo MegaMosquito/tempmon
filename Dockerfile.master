@@ -20,13 +20,14 @@ RUN git clone https://github.com/sunfounder/Adafruit_Python_BMP.git
 WORKDIR /opt/Adafruit_Python_BMP
 RUN python setup.py install
 
-# Install other dependencies
-# RUN pip install adafruit-blinka Flask pygame
-RUN pip install RPI.GPIO Flask pygame
+# Install other dependencies for the MASTER only
+RUN pip install RPI.GPIO pygame requests
 
-# Copy over my code
+# Copy over my code and the web server files
 WORKDIR /
-COPY tempmon.py /
+RUN mkdir /www
+COPY *.py /
+COPY www/* /www/
 
 # Default command is to launch the daemon
 CMD python tempmon.py

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <title>DarlingEvil Temperature Monitor</title>
+    <meta charset="utf-8" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="stylesheet" type="text/css" href="/site.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <style>
+      body {
+        background-color: black;
+      }
+      #tempmon {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+    <meta http-equiv="refresh" content=30>
+  </head>
+  <body">
+    <br /> &nbsp; &nbsp; <img src="/logo.png" class="monitor-logo" height="30px" width="30px" alt="logo" />
+    <canvas id="tempmon", width=2000, height=1200></canvas>
+    <script>
+      var fails = 0;
+      var outTempF1 = 34.5;
+      var inTempF1 = 56.7;
+      var updateStr = "some update info";
+      var color = "green";
+      var canvas = document.getElementById("tempmon");
+      var ctx = canvas.getContext("2d");
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate(' + rot + ');
+      ctx.translate(- canvas.width / 2, - canvas.height / 2);
+      ctx.font = "bolder 320px Arial";
+      ctx.textAlign = "center";
+      ctx.fillStyle = color;
+      ctx.fillText("Out: " + (outTempF1.toFixed(1)) + "F", canvas.width/2 - 80, canvas.height/2 - 180);
+      ctx.fillStyle = "blue";
+      ctx.fillText(" In: " + (inTempF1.toFixed(1)) + "F", canvas.width/2 - 80, canvas.height/2 + 180);
+      ctx.font = "bolder 60px Arial";
+      ctx.fillStyle = "darkgray";
+      ctx.fillText(updateStr, canvas.width/2, canvas.height/2 + 400);
+      setInterval(function() {
+        try {
+          fetch("./")
+            .then(data => {
+              window.location.reload();
+            })
+            .catch(err => {
+              fails = fails + 1;
+              console.log("Cannot load page!  fails=" + fails);
+              if (fails > ' + str(RELOAD_FAILURE_MAX) + ') {
+                ctx.font = "bolder 80px Arial";
+                ctx.fillStyle = "red";
+                ctx.fillText("* Server is unreachable!", canvas.width/2, canvas.height/2 + 600);
+              }
+            });
+        }
+        catch(err) {
+          console.log("Failed to reload page.");
+        }
+      }\n' + \
+    </script>
+  </body>
+</html>

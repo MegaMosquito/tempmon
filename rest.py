@@ -19,8 +19,8 @@ class RestServer(threading.Thread):
     def do_GET(req):
       debug('REST request: GET %s' % (req.path))
       p = req.path.split('/')
-      if (len(p) <= 1) or not (p[1] in RestServer.MyRequestHandler.content):
-        req.send_response(400)
+      if (len(p) != 2) or not (p[1] in RestServer.MyRequestHandler.content):
+        self.send_error(404,'API Not Found: "%s"' % req.path)
       else:
         k = p[1]
         v = RestServer.MyRequestHandler.content[k]
@@ -78,21 +78,20 @@ def signal_handler(sig, frame):
 # Test this thing
 if __name__ == '__main__':
 
-  import subprocess
-
-  # Create a new server instance with specified bind address:port
-  server = RestServer('0.0.0.0', 80)
-  server.start()
-
   # Install the signal handler
   signal.signal(signal.SIGTERM, signal_handler)
   signal.signal(signal.SIGINT, signal_handler)
 
+  # Create a new server instance with specified bind address:port
+  server = RestServer('0.0.0.0', 8080)
+  server.start()
+
   # Cache some data in the REST server
-  server.add("temp-C", 12.34)
+  server.add("temp-F", 999.9)
 
   # Loop forever poking the REST API
-  COMMAND = 'curl -sS http://localhost:80/temp-C | jq .'
+  import subprocess
+  COMMAND = 'curl -sS http://localhost:8080/temp-F | jq .'
   while True:
     result = subprocess.check_output(['/bin/sh', '-c', COMMAND])
     output = result.decode('utf-8')
