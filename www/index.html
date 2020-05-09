@@ -33,9 +33,8 @@
             const j = await response.json();
             const inside = j.inside;
             const outside = j.outside;
-            updated = j.updated;
+            updated = '(Last updated: ' + j.updated + ')';
             // console.log("in=" + inside + ", out=" + outside + ", upd=" + updated);
-            var color = "green";
             ctx.fillStyle = "black";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.translate(canvas.width / 2, canvas.height / 2);
@@ -43,6 +42,10 @@
             ctx.translate(- canvas.width / 2, - canvas.height / 2);
             ctx.font = "bolder 320px Arial";
             ctx.textAlign = "center";
+            var color = "red";
+            if (inside > outside) {
+              color = "green";
+            }
             ctx.fillStyle = color;
             ctx.fillText("Out: " + (outside.toFixed(1)) + "F", canvas.width/2 - 80, canvas.height/2 - 180);
             ctx.fillStyle = "blue";
@@ -51,7 +54,7 @@
           catch(err) {
             console.log("exception: err=" + err);
           }
-          ctx.font = "bolder 60px Arial";
+          ctx.font = "bolder 50px Arial";
           ctx.fillStyle = "gray";
           ctx.fillText(updated, canvas.width/2, canvas.height/2 + 400);
           setTimeout(startRefresh, 750);

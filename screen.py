@@ -40,7 +40,7 @@ BLUE = (0, 0, 255)
 GREEN = (0, 255, 0)
 RED = (255, 0, 0)
 PURPLE = (192, 0, 192)
-GRAY = (192, 192, 192)
+GRAY = (160, 160, 160)
 
 # Basic disablable logging
 DEBUG = False
@@ -90,9 +90,9 @@ class MyScreen(threading.Thread):
     GPIO.setwarnings(False)
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(18, GPIO.OUT)
-    PWM_FREQUENCY = 2000
+    PWM_FREQUENCY = 300
     backlight_percent = GPIO.PWM(18, PWM_FREQUENCY)
-    backlight_percent.start(20)
+    backlight_percent.start(67)
 
     # PyGame looping forever
     while not self.done:
@@ -104,7 +104,7 @@ class MyScreen(threading.Thread):
  
       # Print text with selected font, size, bold, italics
       font = pygame.font.SysFont('Calibri', 220, True, False)
-      smallfont = pygame.font.SysFont('Calibri', 50, True, False)
+      smallfont = pygame.font.SysFont('Calibri', 40, True, False)
 
       # Set color based on relative temperature
       color = RED
@@ -122,7 +122,7 @@ class MyScreen(threading.Thread):
       self.screen.blit(text, [MyScreen.SCREENSIZE[0] // 2 - text.get_width() // 2, 220])
 
       # Show last update time at bottom in a small font
-      update_str = self.updated
+      update_str = 'Last updated: ' + self.updated
       text = smallfont.render("(" + str(update_str) + ")", True, GRAY)
       text = pygame.transform.rotate(text, 0)
       self.screen.blit(text, [MyScreen.SCREENSIZE[0] // 2 - text.get_width() // 2, 400])
