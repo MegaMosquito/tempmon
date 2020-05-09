@@ -40,7 +40,7 @@ BLUE = (0, 0, 255)
 GREEN = (0, 255, 0)
 RED = (255, 0, 0)
 PURPLE = (192, 0, 192)
-GRAY = (128, 128, 128)
+GRAY = (192, 192, 192)
 
 # Basic disablable logging
 DEBUG = False
@@ -66,6 +66,7 @@ class MyScreen(threading.Thread):
     pygame.mouse.set_visible(False)
     self.inTempF = -9999.0
     self.outTempF = 9999.0
+    self.updated = "[server unreachable]"
     self.done = False
 
   def set_inside(self, inTempF):
@@ -73,6 +74,9 @@ class MyScreen(threading.Thread):
 
   def set_outside(self, outTempF):
     self.outTempF = outTempF
+
+  def set_updated(self, updated):
+    self.updated = updated
 
   def stop(self):
     debug("Terminating screen update loop!")
@@ -118,8 +122,7 @@ class MyScreen(threading.Thread):
       self.screen.blit(text, [MyScreen.SCREENSIZE[0] // 2 - text.get_width() // 2, 220])
 
       # Show last update time at bottom in a small font
-      #update_str = updated.strftime('%a, %b %-d at %-I:%M%p')
-      update_str = "update info goes here"
+      update_str = self.updated
       text = smallfont.render("(" + str(update_str) + ")", True, GRAY)
       text = pygame.transform.rotate(text, 0)
       self.screen.blit(text, [MyScreen.SCREENSIZE[0] // 2 - text.get_width() // 2, 400])

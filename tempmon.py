@@ -31,7 +31,7 @@ import threading
 
 
 # Basic disablable logging
-DEBUG = False
+DEBUG = True
 def debug(s):
   if DEBUG: print(s)
 
@@ -44,16 +44,14 @@ def get_from_env(v, d):
     return d
 MASTER = get_from_env('MASTER', '')
 SLAVE_IP = get_from_env('SLAVE_IP', '')
-SLAVE_PORT = get_from_env('SLAVE_PORT', '7032')
 DISPLAY = get_from_env('DISPLAY', ':0.0')
 
 
 # Local modules
 from temp import Temp
-from rest import RestServer
+from web import MyServer
 if 'yes' == MASTER:
   from screen import MyScreen
-  from web import WebServer
 
 
 # Log setup info
@@ -63,7 +61,7 @@ print("****************************************")
 print("****")
 if 'yes' == MASTER:
   print("****   RUNNING AS MASTER!")
-  print("****   Slave at: " + SLAVE_IP + ":" + str(SLAVE_PORT))
+  print("****   Slave at: " + SLAVE_IP + ":80")
 else:
   print("****   RUNNING AS SLAVE!")
 print("****")
@@ -91,11 +89,9 @@ BMP180 = BMP085.BMP085()
 
 
 # Constants
-REST_BIND_ADDRESS = '0.0.0.0'
-REST_BIND_PORT = 7032
+WEB_BIND_ADDRESS = '0.0.0.0'
+WEB_BIND_PORT = 80
 if 'yes' == MASTER:
-  WEB_BIND_ADDRESS = '0.0.0.0'
-  WEB_BIND_PORT = 80
   # Directory where the web server files will be served from
   SERVER_DIR = './www/'
 
@@ -103,10 +99,9 @@ if 'yes' == MASTER:
 # Globals
 done = False
 temp = None
-rest_server = None
+web_server = None
 if 'yes' == MASTER:
   my_screen = None
-  web_server = None
 
 
 # Signal handler for clean exit
@@ -115,10 +110,9 @@ def signal_handler(sig, frame):
   global done
   done = True
   temp.stop()
-  rest_server.stop()
+  web_server.stop()
   if 'yes' == MASTER:
     my_screen.stop()
-    web_server.stop()
   time.sleep(0.5)
   sys.exit(0)
 
@@ -134,30 +128,27 @@ if __name__ == '__main__':
   temp = Temp(-3, 1)
   temp.start()
 
-  # Create a new REST server instance with specified bind address:port
-  rest_server = RestServer(REST_BIND_ADDRESS, REST_BIND_PORT)
-  rest_server.start()
+  # Create a new web server and bind it to the specified address:port
+  web_server = MyServer(WEB_BIND_ADDRESS, WEB_BIND_PORT)
+  web_server.start()
 
   # If this is the MASTER, setup slave URL, screen thread and web server thread
   if 'yes' == MASTER:
 
     # Construct the URL for getting the slave's temperature
-    SLAVE_TEMP_URL = 'http://' + SLAVE_IP + ':' + SLAVE_PORT + '/temp-F'
+    SLAVE_TEMP_URL = 'http://' + SLAVE_IP + ':' + str(WEB_BIND_PORT) + '/api/temp-F'
+    debug("--> SLAVE_TEMP_URL = \"" + SLAVE_TEMP_URL + "\"")
 
     # Create a new screen handler object
     my_screen = MyScreen()
     my_screen.start()
 
-    # Create a new web server and bind it to the specified address:port
-    web_server = WebServer(WEB_BIND_ADDRESS, WEB_BIND_PORT)
-    web_server.start()
-
     # And cache the filenames in the web server
     # NOTE: These files must be in the SERVER_DIR
-    web_server.add("favicon.ico", 'image/x-icon')
-    web_server.add("index.html", 'text/html')
-    web_server.add("site.css", 'text/css')
-    web_server.add("logo.png", 'image/png')
+    web_server.add_file("favicon.ico", 'image/x-icon')
+    web_server.add_file("index.html", 'text/html')
+    web_server.add_file("site.css", 'text/css')
+    web_server.add_file("logo.png", 'image/png')
 
 
   # Loop forever 
@@ -165,35 +156,41 @@ if __name__ == '__main__':
 
     # Get the local temperature and update the REST server with it
     localTempF = temp.f()
-    rest_server.add("temp-F", localTempF)
+    web_server.add_api("temp-F", localTempF)
     # If this is the MASTER, update it on the screen as well
     if 'yes' == MASTER:
       my_screen.set_inside(localTempF)
 
     # If this is the MASTER, then get remote temperature and deal with it
     if 'yes' == MASTER:
-      # try:
+      try:
         # Try to get it fom the slave
         debug("--> URL=\"%s\"" % SLAVE_TEMP_URL)
         r = requests.get(SLAVE_TEMP_URL)
         if (r.status_code <= 299):
           # Got it. Decode, and tell REST server and screen about it
           j = r.json()
+          # updated = datetime.datetime.now(),isoformat()
+          updated = datetime.datetime.now().strftime('%a, %b %-d at %-I:%M%p')
           remoteTempF = j['temp-F']
+          debug ("--> (local: %0.1fF, remote: %0.1fF, updated: %s)" % (localTempF, remoteTempF, updated))
           my_screen.set_outside(remoteTempF)
+          my_screen.set_updated(updated)
           # Since this is the master, also put this in the REST server
-          rest_server.add("remote-temp-F", remoteTempF)
-          debug ("--> (local: %0.1fF, remote: %0.1fF)" % (localTempF, remoteTempF))
+          out = ('{"inside":%0.1f,"outside":%0.1f,"updated":"%s"}\n' % (localTempF, remoteTempF, updated))
+          debug ('--> json:\n%s' % out)
+          web_server.add_api("json", out)
         else:
           # Remote REST server gave an error code
           debug ("--> (local: %0.1fF, remote: *ERROR*)" % localTempF)
-      # except:
+      except:
         # Remote REST server was unreachable
-      #   debug ("--> (local: %0.1fF, remote: *UNREACHABLE*)" % localTempF)
+        debug ("--> (local: %0.1fF, remote: *UNREACHABLE*)" % localTempF)
     else:
       # Running as SLAVE, only local temperature is available
       debug ("--> (local: %0.1fF)" % localTempF)
 
     # Pause briefly
     time.sleep(5)
+
 

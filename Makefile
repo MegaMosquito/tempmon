@@ -39,7 +39,6 @@ dev:
             --device /dev:/dev \
             -e MASTER="yes" \
             -e SLAVE_IP="192.168.123.96" \
-            -e SLAVE_PORT="7032" \
             -e DISPLAY=":0.0" \
             -v /tmp/.X11-unix:/tmp/.X11-unix \
             -v ~/.Xauthority:/root/.Xauthority \
@@ -56,7 +55,6 @@ master:
             --device /dev:/dev \
             -e MASTER="yes" \
             -e SLAVE_IP="192.168.123.96" \
-            -e SLAVE_PORT="7032" \
             -e DISPLAY=":0.0" \
             -v /tmp/.X11-unix:/tmp/.X11-unix \
             -v ~/.Xauthority:/root/.Xauthority \
@@ -67,7 +65,7 @@ slave:
 	docker run -d --restart unless-stopped \
             --name tempmon \
             --privileged \
-            -p 0.0.0.0:7032:7032 \
+            -p 0.0.0.0:80:80 \
             --device /dev:/dev \
             $(IMAGE_NAME_SLAVE)
 
