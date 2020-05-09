@@ -40,6 +40,7 @@ dev:
             -e MASTER="yes" \
             -e SLAVE_IP="192.168.123.96" \
             -e DISPLAY=":0.0" \
+            -e TZ='America/Los_Angeles' \
             -v /tmp/.X11-unix:/tmp/.X11-unix \
             -v ~/.Xauthority:/root/.Xauthority \
             -v `pwd`:/outside \
@@ -56,6 +57,7 @@ master:
             -e MASTER="yes" \
             -e SLAVE_IP="192.168.123.96" \
             -e DISPLAY=":0.0" \
+            -e TZ='America/Los_Angeles' \
             -v /tmp/.X11-unix:/tmp/.X11-unix \
             -v ~/.Xauthority:/root/.Xauthority \
             $(IMAGE_NAME_MASTER)

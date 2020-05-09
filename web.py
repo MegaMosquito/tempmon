@@ -56,10 +56,7 @@ class MyServer(threading.Thread):
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
         self.end_headers()
-        if isinstance(v, str) :
-          self.wfile.write('{"' + k + '":"' + v + '"}\n')
-        else:
-          self.wfile.write('{"' + k + '":' + str(v) + '}\n')
+        self.wfile.write(v)
       else:
         self.send_error(404, ('Resource not found: %s' % self.path))
 
@@ -126,7 +123,7 @@ if __name__ == '__main__':
   server.start()
 
   # Cache some REST API data in the server
-  server.add_api("temp-F", 999.9)
+  server.add_api("temp-F", ('{"temp-F":%0.1f}\n' % 999.9))
 
   # Cache some filenames in the server
   # NOTE: These files must be in the SERVER_DIR

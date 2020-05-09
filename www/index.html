@@ -27,12 +27,14 @@
         var canvas = tempmon;
         var ctx = canvas.getContext("2d");
         (async function startRefresh() {
+          let updated = "(server not responding)";
           try {
-            const response = await fetch("http://192.168.123.97:7032/json");
+            const response = await fetch("/api/json");
             const j = await response.json();
             const inside = j.inside;
             const outside = j.outside;
-            const updated = j.updated;
+            updated = j.updated;
+            // console.log("in=" + inside + ", out=" + outside + ", upd=" + updated);
             var color = "green";
             ctx.fillStyle = "black";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -47,7 +49,7 @@
             ctx.fillText(" In: " + (inside.toFixed(1)) + "F", canvas.width/2 - 80, canvas.height/2 + 180);
           }
           catch(err) {
-            updated = "(server not responding)";
+            console.log("exception: err=" + err);
           }
           ctx.font = "bolder 60px Arial";
           ctx.fillStyle = "gray";

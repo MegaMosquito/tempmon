@@ -156,7 +156,7 @@ if __name__ == '__main__':
 
     # Get the local temperature and update the REST server with it
     localTempF = temp.f()
-    web_server.add_api("temp-F", localTempF)
+    web_server.add_api("temp-F", ('{"temp-F":%0.1f}\n' % localTempF))
     # If this is the MASTER, update it on the screen as well
     if 'yes' == MASTER:
       my_screen.set_inside(localTempF)
@@ -172,6 +172,7 @@ if __name__ == '__main__':
           j = r.json()
           # updated = datetime.datetime.now(),isoformat()
           updated = datetime.datetime.now().strftime('%a, %b %-d at %-I:%M%p')
+          web_server.add_api("updated", ('{"updated":"%s"}\n' % updated))
           remoteTempF = j['temp-F']
           debug ("--> (local: %0.1fF, remote: %0.1fF, updated: %s)" % (localTempF, remoteTempF, updated))
           my_screen.set_outside(remoteTempF)
