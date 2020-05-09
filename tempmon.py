@@ -31,7 +31,7 @@ import threading
 
 
 # Basic disablable logging
-DEBUG = True
+DEBUG = False
 def debug(s):
   if DEBUG: print(s)
 
